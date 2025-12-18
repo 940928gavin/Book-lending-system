@@ -1,325 +1,270 @@
 # -*- coding: utf-8 -*-
-
-###########################################################################
-## app_logic.py - 應用程式邏輯與事件處理 (整合 15 個畫面, 引用路徑已修正)
-###########################################################################
-
 import wx
-from gui import (
-    MainFrameBase, QueryBookFrameBase, IdentityChoiceFrameBase,
-    ReaderLoginFormBase, RegisterFormBase, BorrowRecordFrameBase,
-    BookDetailFrameBase, BorrowResultFrameBase, ReserveResultFrameBase,
-    AdminLoginFormBase, AdminPanelFrameBase, AdminBookDetailBase,
-    EditBookFormBase, ReaderListFrameBase, EditReaderFormBase
-)
+from gui import * # 匯入 gui.py 中所有的 Base 類別
+from db_manager import DBManager
 
-# ----------------------------------------------------------------------
-# 中央管理器：管理所有畫面實例
-# ----------------------------------------------------------------------
+# =======================================================================
+# 中央管理器：MainFrame
+# =======================================================================
 class MainFrame(MainFrameBase):
     def __init__(self, parent):
         MainFrameBase.__init__(self, parent)
-
+        self.db = DBManager()
+        self.current_user = None  # 儲存登入讀者的 ID
         self.frames = {}
-        # 初始化所有潛在的畫面實例佔位符 (簡化寫法，也可以在 GetFrame 中動態創建)
-        self.frames['IdentityChoice'] = None
-        self.frames['BorrowRecord'] = None
-        self.frames['BookDetail'] = None
-        self.frames['AdminPanel'] = None # 管理員主控台
-        self.frames['AdminLogin'] = None
-        # 註冊/登入/修改表單等通常為臨時畫面，不在 MainFrame 級別預設創建
+
+        # 確保搜尋按鈕綁定 (假設按鈕名為 query_button，若不同請修改)
+        if hasattr(self, 'query_button'):
+            self.query_button.Bind(wx.EVT_BUTTON, self.OnQueryButtonClick)
 
     def ShowMainFrame(self):
-        """用於其他畫面返回主畫面時呼叫"""
         self.Show(True)
 
-    def GetFrame(self, name, FrameClass, parent=None):
-        """獲取或創建指定名稱的畫面實例"""
+    def GetFrame(self, name, FrameClass):
         if name not in self.frames or self.frames[name] is None:
-            # 對於需要知道 MainFrame 的子畫面，傳入 self 作為 parent
-            if parent is None: parent = self 
-            
-            # 使用 getattr 查找是否存在 FrameClass，否則動態創建
-            if name in ['AdminLogin', 'ReaderLogin', 'Register', 'BorrowResult', 'ReserveResult', 'EditBook', 'EditReader']:
-                 # 臨時性表單/結果頁，不需要在 self.frames 裡永久儲存 (或可以儲存但隨時覆蓋)
-                 return FrameClass(parent)
-            
-            self.frames[name] = FrameClass(parent)
-            
+            self.frames[name] = FrameClass(self)
         return self.frames[name]
 
-    # --- MainFrame 事件 ---
-    
-    # 點擊「查詢」
+    # --- 搜尋書籍功能 ---
     def OnQueryButtonClick(self, event):
-        book_name = self.book_search_input.GetValue().strip()
-        if book_name:
+        query = self.book_search_input.GetValue().strip()
+        print(f"🔍 正在搜尋書籍: {query}")
+        
+        book = self.db.get_book_by_title(query)
+        if book:
+            print(f"✅ 找到書籍: {book}")
             self.Hide()
-            # 獲取 BookDetailFrame，並傳入 MainFrame
-            detail_frame = self.GetFrame('BookDetail', BookDetailFrame, parent=self)
-            detail_frame.SetTitle(f"書籍資料: {book_name}")
-            detail_frame.Show()
+            detail = self.GetFrame('BookDetail', BookDetailFrame)
+            detail.UpdateInfo(book) # 將資料庫數據傳入詳情頁
+            detail.Show()
         else:
-            wx.MessageBox("請輸入書籍名稱以進行查詢。", "提示", wx.OK | wx.ICON_INFORMATION)
-            event.Skip()
+            print("❌ 找不到該書籍")
+            wx.MessageBox(f"找不到關於 '{query}' 的書籍。\n請試試搜尋: Python", "查無此書")
 
-    # 點擊「登入/出」
     def OnLoginButtonClick(self, event):
         self.Hide()
-        identity_frame = self.GetFrame('IdentityChoice', IdentityChoiceFrame, parent=self)
-        identity_frame.Show()
+        self.GetFrame('IdentityChoice', IdentityChoiceFrame).Show()
 
-    # 點擊「查看借閱紀錄」
     def OnViewBorrowRecord(self, event):
+        if not self.current_user:
+            wx.MessageBox("請先登入讀者帳號！", "提示")
+            return
         self.Hide()
-        record_frame = self.GetFrame('BorrowRecord', BorrowRecordFrame, parent=self)
-        record_frame.Show()
+        self.GetFrame('BorrowRecord', BorrowRecordFrame).Show()
 
-# ----------------------------------------------------------------------
-# 畫面組 A: 讀者流程
-# ----------------------------------------------------------------------
+# =======================================================================
+# 讀者流程類別
+# =======================================================================
+
 class IdentityChoiceFrame(IdentityChoiceFrameBase):
     def __init__(self, parent):
         IdentityChoiceFrameBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
+        self.main_frame = parent
     def OnReaderLogin(self, event):
-        self.Hide()
-        # 直接通過 main_frame 獲取下一個畫面
-        reader_login_frame = self.main_frame.GetFrame('ReaderLogin', ReaderLoginForm, parent=self.main_frame)
-        reader_login_frame.Show()
-
+        self.Hide(); self.main_frame.GetFrame('ReaderLogin', ReaderLoginForm).Show()
     def OnAdminLogin(self, event):
-        self.Hide()
-        # 直接通過 main_frame 獲取下一個畫面
-        admin_login_frame = self.main_frame.GetFrame('AdminLogin', AdminLoginForm, parent=self.main_frame)
-        admin_login_frame.Show()
-
+        self.Hide(); self.main_frame.GetFrame('AdminLogin', AdminLoginForm).Show()
     def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
+        self.Hide(); self.main_frame.ShowMainFrame()
 
 class ReaderLoginForm(ReaderLoginFormBase):
     def __init__(self, parent):
         ReaderLoginFormBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
+        self.main_frame = parent
     def OnRegisterClick(self, event):
-        self.Hide()
-        register_frame = self.main_frame.GetFrame('Register', RegisterForm, parent=self.main_frame)
-        register_frame.Show()
-
+        self.Hide(); self.main_frame.GetFrame('Register', RegisterForm).Show()
     def OnLoginSubmit(self, event):
-        wx.MessageBox("讀者登入成功！", "提示", wx.OK | wx.ICON_INFORMATION)
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
+        rid = self.account_input.GetValue()
+        user = self.main_frame.db.get_reader_by_id(rid)
+        if user:
+            self.main_frame.current_user = rid
+            wx.MessageBox(f"登入成功！歡迎回來, {user[1]}", "提示")
+            self.Hide(); self.main_frame.ShowMainFrame()
+        else:
+            wx.MessageBox("帳號錯誤或不存在，請先註冊。", "登入失敗")
 
 class RegisterForm(RegisterFormBase):
     def __init__(self, parent):
         RegisterFormBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnRegisterSubmit(self, event):
-        wx.MessageBox("註冊成功！請登入。", "提示", wx.OK | wx.ICON_INFORMATION)
-        self.Hide()
-        reader_login_frame = self.main_frame.GetFrame('ReaderLogin', ReaderLoginForm, parent=self.main_frame)
-        reader_login_frame.Show()
-
-    def OnClose(self, event):
-        self.Hide()
-        reader_login_frame = self.main_frame.GetFrame('ReaderLogin', ReaderLoginForm, parent=self.main_frame)
-        reader_login_frame.Show()
-
-
-class BorrowRecordFrame(BorrowRecordFrameBase):
-    def __init__(self, parent):
-        BorrowRecordFrameBase.__init__(self, parent)
         self.main_frame = parent
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnBackClick(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
+    def OnRegisterSubmit(self, event):
+        rid = self.account_name_input.GetValue()
+        email = self.email_input.GetValue()
+        pwd = self.password_input.GetValue()
+        if self.main_frame.db.register_reader(rid, rid, email, pwd):
+            wx.MessageBox(f"註冊成功！您的 ID 為: {rid}", "提示")
+            self.Hide(); self.main_frame.ShowMainFrame()
+        else:
+            wx.MessageBox("註冊失敗，ID 可能已被佔用。", "錯誤")
 
 class BookDetailFrame(BookDetailFrameBase):
     def __init__(self, parent):
         BookDetailFrameBase.__init__(self, parent)
         self.main_frame = parent
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.current_book_data = None  # 儲存當前書籍資料
+
+    def UpdateInfo(self, data):
+        """
+        data 內容格式: (BookID, Title, Author, ISBN, Available)
+        索引對應:      [0]     [1]    [2]     [3]    [4]
+        """
+        self.current_book_data = data
+        print(f"📖 正在更新介面元件，資料: {data}")
+
+        # --- 根據你提供的 gui.py 變數名稱進行對接 ---
+        # data[1] 是 Title, data[2] 是 Author... 以此類推
+        
+        # 書名
+        if hasattr(self, 'm_staticText4'):
+            self.m_staticText4.SetLabel(f"書名：{data[1]}")
+            
+        # 作者
+        if hasattr(self, 'm_staticText41'):
+            self.m_staticText41.SetLabel(f"作者：{data[2]}")
+            
+        # 書號 (BookID)
+        if hasattr(self, 'm_staticText42'):
+            self.m_staticText42.SetLabel(f"書號：{data[0]}")
+            
+        # ISBN
+        if hasattr(self, 'm_staticText43'):
+            self.m_staticText43.SetLabel(f"ISBN：{data[3]}")
+            
+        # 狀態 (庫存)
+        if hasattr(self, 'm_staticText44'):
+            status = "可借閱" if data[4] > 0 else "已借光"
+            self.m_staticText44.SetLabel(f"狀態：{status} (剩餘 {data[4]} 本)")
+
+        # 重新佈局，確保文字不會被遮擋
+        self.Layout()
 
     def OnBorrowClick(self, event):
-        self.Hide()
-        borrow_result = self.main_frame.GetFrame('BorrowResult', BorrowResultFrame, parent=self.main_frame)
-        borrow_result.Show()
+        """處理借閱按鈕點擊"""
+        if not self.main_frame.current_user:
+            wx.MessageBox("請先登入讀者帳號再進行借閱！", "提示")
+            return
 
-    def OnReserveClick(self, event):
-        self.Hide()
-        reserve_result = self.main_frame.GetFrame('ReserveResult', ReserveResultFrame, parent=self.main_frame)
-        reserve_result.Show()
+        if self.current_book_data:
+            book_id = self.current_book_data[0]
+            # 呼叫資料庫執行借閱
+            if self.main_frame.db.borrow_book(self.main_frame.current_user, book_id):
+                wx.MessageBox(f"《{self.current_book_data[1]}》借閱成功！", "通知")
+                self.Hide()
+                self.main_frame.ShowMainFrame()
+            else:
+                wx.MessageBox("借閱失敗：可能目前無庫存。", "提示")
 
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-
-class BorrowResultFrame(BorrowResultFrameBase):
+class BorrowRecordFrame(BorrowRecordFrameBase):
     def __init__(self, parent):
-        BorrowResultFrameBase.__init__(self, parent)
+        BorrowRecordFrameBase.__init__(self, parent)
         self.main_frame = parent
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Bind(wx.EVT_SHOW, self.OnShow)
 
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
+    def OnShow(self, event):
+        if event.IsShown() and self.main_frame.current_user:
+            history = self.main_frame.db.get_borrow_history(self.main_frame.current_user)
+            if history and hasattr(self, 'm_staticText6'):
+                h = history[-1]
+                self.m_staticText6.SetLabel(f"最新紀錄: {h[0]} (借閱日: {h[1]})")
+        event.Skip()
 
+    def OnBackClick(self, event):
+        self.Hide(); self.main_frame.ShowMainFrame()
 
-class ReserveResultFrame(ReserveResultFrameBase):
-    def __init__(self, parent):
-        ReserveResultFrameBase.__init__(self, parent)
-        self.main_frame = parent
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+# =======================================================================
+# 管理員流程類別
+# =======================================================================
 
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-# ----------------------------------------------------------------------
-# 畫面組 B: 管理員流程
-# ----------------------------------------------------------------------
 class AdminLoginForm(AdminLoginFormBase):
     def __init__(self, parent):
         AdminLoginFormBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
+        self.main_frame = parent
     def OnAdminLoginSubmit(self, event):
-        is_successful = True
-        if is_successful:
-            wx.MessageBox("管理員登入成功！", "提示", wx.OK | wx.ICON_INFORMATION)
+        acc = self.account_input.GetValue()
+        pwd = self.password_input.GetValue()
+        if acc == 'admin' and pwd == 'admin123':
             self.Hide()
-            admin_panel = self.main_frame.GetFrame('AdminPanel', AdminPanelFrame, parent=self.main_frame)
-            admin_panel.Show()
+            self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
         else:
-            wx.MessageBox("帳號或密碼錯誤。", "錯誤", wx.OK | wx.ICON_ERROR)
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
+            wx.MessageBox("管理員密碼錯誤。", "錯誤")
 
 class AdminPanelFrame(AdminPanelFrameBase):
     def __init__(self, parent):
         AdminPanelFrameBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnQueryBook(self, event):
-        self.Hide()
-        # 跳轉到 AdminBookDetailFrame，並傳入 MainFrame
-        book_detail = self.main_frame.GetFrame('AdminBookDetail', AdminBookDetailFrame, parent=self.main_frame)
-        book_detail.Show()
-
+        self.main_frame = parent
     def OnViewReaders(self, event):
         self.Hide()
-        # 跳轉到 ReaderListFrame，並傳入 MainFrame
-        reader_list = self.main_frame.GetFrame('ReaderList', ReaderListFrame, parent=self.main_frame)
-        reader_list.Show()
-
+        self.main_frame.GetFrame('ReaderList', ReaderListFrame).Show()
     def OnLogout(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.ShowMainFrame()
-
-
-class AdminBookDetailFrame(AdminBookDetailBase):
-    def __init__(self, parent):
-        AdminBookDetailBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnEditBook(self, event):
-        self.Hide()
-        # 通過 main_frame 獲取 EditBookForm
-        edit_form = self.main_frame.GetFrame('EditBook', EditBookForm, parent=self.main_frame)
-        edit_form.Show()
-
-    def OnDeleteBook(self, event):
-        wx.MessageBox("書籍已下架！", "提示", wx.OK | wx.ICON_INFORMATION)
-
-    def OnClose(self, event):
-        self.Hide()
-        # 返回 AdminPanelFrame
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
-
-class EditBookForm(EditBookFormBase):
-    def __init__(self, parent):
-        EditBookFormBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnCancel(self, event):
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
-    def OnComplete(self, event):
-        wx.MessageBox("書籍資料修改完成！", "提示", wx.OK | wx.ICON_INFORMATION)
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
+        self.Hide(); self.main_frame.ShowMainFrame()
 
 class ReaderListFrame(ReaderListFrameBase):
     def __init__(self, parent):
         ReaderListFrameBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.main_frame = parent
+        
+        # 綁定顯示事件，確保每次切換到這畫面都會刷新列表
+        self.Bind(wx.EVT_SHOW, self.OnShow)
+
+    def OnShow(self, event):
+        """當視窗顯示時觸發，從資料庫撈取資料填入表格"""
+        if event.IsShown():
+            print("📊 管理員正在刷新讀者清單表格...")
+            self.RefreshReaderTable()
+        event.Skip()
+
+    def RefreshReaderTable(self):
+        """清除舊資料並載入資料庫中所有讀者"""
+        # 1. 先清空 ListCtrl 中的所有項目
+        self.reader_list_ctrl.DeleteAllItems()
+        
+        # 2. 從資料庫獲取所有讀者資料
+        # 資料格式: [(ID1, Name1, Email1, Credit1), (ID2, Name2, Email2, Credit2), ...]
+        readers = self.main_frame.db.get_all_readers()
+        
+        if not readers:
+            print("⚠️ 資料庫目前沒有任何讀者紀錄。")
+            return
+
+        # 3. 循環每一筆資料並填入表格
+        for i, r in enumerate(readers):
+            # InsertItem 建立新的一列，並填入第一欄 (讀者編號)
+            index = self.reader_list_ctrl.InsertItem(i, str(r[0]))
+            
+            # SetItem 填入後續欄位 (姓名、Email、信用分)
+            self.reader_list_ctrl.SetItem(index, 1, str(r[1])) # 姓名
+            self.reader_list_ctrl.SetItem(index, 2, str(r[2])) # E-Mail
+            self.reader_list_ctrl.SetItem(index, 3, str(r[3])) # 信用分
+            
+        print(f"✅ 已成功載入 {len(readers)} 筆讀者資料。")
+        self.Layout()
+
+    def OnBackClick(self, event):
+        """處理返回按鈕，回到管理面板"""
+        self.Hide()
+        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
 
     def OnEditReader(self, event):
-        self.Hide()
-        # 通過 main_frame 獲取 EditReaderForm
-        edit_form = self.main_frame.GetFrame('EditReader', EditReaderForm, parent=self.main_frame)
-        edit_form.Show()
+        """處理修改資料按鈕 (可選)"""
+        selected = self.reader_list_ctrl.GetFirstSelected()
+        if selected == -1:
+            wx.MessageBox("請先從列表中選擇一位讀者！", "提示")
+            return
+        
+        # 獲取選中讀者的 ID
+        reader_id = self.reader_list_ctrl.GetItemText(selected, 0)
+        wx.MessageBox(f"準備修改讀者 {reader_id} 的資料 (功能開發中)", "提示")
 
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
-
-class EditReaderForm(EditReaderFormBase):
-    def __init__(self, parent):
-        EditReaderFormBase.__init__(self, parent)
-        self.main_frame = parent # parent 必須是 MainFrame
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-    def OnCancel(self, event):
+    def OnBackClick(self, event):
+        """返回管理員主面板"""
         self.Hide()
         self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
 
-    def OnComplete(self, event):
-        wx.MessageBox("讀者資料修改完成！", "提示", wx.OK | wx.ICON_INFORMATION)
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
-
-    def OnClose(self, event):
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
+# =======================================================================
+# 備用類別：防止未定義錯誤
+# =======================================================================
+class BorrowResultFrame(BorrowResultFrameBase): pass
+class ReserveResultFrame(ReserveResultFrameBase): pass
+class AdminBookDetail(AdminBookDetailBase): pass
+class EditBookForm(EditBookFormBase): pass
+class EditReaderForm(EditReaderFormBase): pass
