@@ -191,6 +191,8 @@ class ReaderLoginFormBase ( wx.Frame ):
         self.login_submit_button = wx.Button( self, wx.ID_ANY, _(u"登入"), wx.DefaultPosition, wx.DefaultSize, 0 )
         bSizer8.Add( self.login_submit_button, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
         bSizer8.Add( ( 0, 0), 1, wx.EXPAND, 5 )
+        self.back_button = wx.Button( self, wx.ID_ANY, _(u"返回"), wx.DefaultPosition, wx.DefaultSize, 0 )
+        bSizer8.Add( self.back_button, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
         self.m_button5 = wx.Button( self, wx.ID_ANY, _(u"忘記密碼"), wx.DefaultPosition, wx.DefaultSize, 0 )
         bSizer8.Add( self.m_button5, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
         bSizer8.Add( ( 0, 0), 1, wx.EXPAND, 5 )
@@ -203,6 +205,7 @@ class ReaderLoginFormBase ( wx.Frame ):
         self.Centre( wx.BOTH )
         self.register_button.Bind( wx.EVT_BUTTON, self.OnRegisterClick )
         self.login_submit_button.Bind( wx.EVT_BUTTON, self.OnLoginSubmit )
+        self.back_button.Bind( wx.EVT_BUTTON, self.OnBackToChoice )
     def __del__( self ): pass
     def OnRegisterClick( self, event ): event.Skip()
     def OnLoginSubmit( self, event ): event.Skip()
@@ -321,6 +324,8 @@ class BookDetailFrameBase ( wx.Frame ):
         self.SetSizeHints( wx.DefaultSize, wx.DefaultSize )
         self.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_3DLIGHT ) )
         bSizer6 = wx.BoxSizer( wx.VERTICAL )
+        self.m_button3 = wx.Button( self, wx.ID_ANY, _(u"返回"), wx.DefaultPosition, wx.DefaultSize, 0 )
+        bSizer6.Add( self.m_button3, 0, wx.ALL, 5 )
         self.m_bitmap6 = wx.StaticBitmap( self, wx.ID_ANY, wx.NullBitmap, wx.DefaultPosition, wx.DefaultSize, 0 )
         bSizer6.Add( self.m_bitmap6, 0, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL, 5 )
         bSizer7 = wx.BoxSizer( wx.HORIZONTAL )
@@ -373,6 +378,7 @@ class BookDetailFrameBase ( wx.Frame ):
         self.Centre( wx.BOTH )
         self.borrow_button.Bind( wx.EVT_BUTTON, self.OnBorrowClick )
         self.reserve_button.Bind( wx.EVT_BUTTON, self.OnReserveClick )
+        self.m_button3.Bind(wx.EVT_BUTTON, self.OnBackClick)
     def __del__( self ): pass
     def OnBorrowClick( self, event ): event.Skip()
     def OnReserveClick( self, event ): event.Skip()
@@ -466,6 +472,8 @@ class AdminLoginFormBase ( wx.Frame ):
         bSizer8.Add( ( 0, 0), 1, wx.EXPAND, 5 )
         self.login_submit_button = wx.Button( self, wx.ID_ANY, _(u"登入"), wx.DefaultPosition, wx.DefaultSize, 0 )
         bSizer8.Add( self.login_submit_button, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
+        self.back_btn = wx.Button( self, wx.ID_ANY, _(u"返回"), wx.DefaultPosition, wx.DefaultSize, 0 )
+        bSizer8.Add( self.back_btn, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
         bSizer8.Add( ( 0, 0), 1, wx.EXPAND, 5 )
         bSizer8.Add( ( 0, 0), 1, wx.EXPAND, 5 )
         bSizer1.Add( bSizer8, 1, wx.EXPAND, 5 )
@@ -476,6 +484,7 @@ class AdminLoginFormBase ( wx.Frame ):
         self.Layout()
         self.Centre( wx.BOTH )
         self.login_submit_button.Bind( wx.EVT_BUTTON, self.OnAdminLoginSubmit )
+        self.back_btn.Bind( wx.EVT_BUTTON, self.OnBackToChoice )
     def __del__( self ): pass
     def OnAdminLoginSubmit( self, event ): event.Skip()
 
@@ -726,3 +735,4 @@ class EditReaderFormBase ( wx.Frame ):
     def __del__( self ): pass
     def OnCancel( self, event ): event.Skip()
     def OnComplete( self, event ): event.Skip()
+
