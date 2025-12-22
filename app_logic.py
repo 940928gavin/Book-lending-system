@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import wx
+import builtins
+builtins.__dict__['_'] = lambda s: s
 from gui import * # 匯入 gui.py 中所有的 Base 類別
 from db_manager import DBManager
 
@@ -28,6 +30,9 @@ class MainFrame(MainFrameBase):
     # --- 搜尋書籍功能 ---
     def OnQueryButtonClick(self, event):
         query = self.book_search_input.GetValue().strip()
+        if not query:
+            wx.MessageBox("請輸入書名關鍵字再進行查詢！", "提示")
+            return
         print(f"🔍 正在搜尋書籍: {query}")
         
         book = self.db.get_book_by_title(query)
@@ -71,6 +76,11 @@ class ReaderLoginForm(ReaderLoginFormBase):
     def __init__(self, parent):
         ReaderLoginFormBase.__init__(self, parent)
         self.main_frame = parent
+    def OnBackToChoice(self, event):
+        """點擊返回鍵：回到主畫面"""
+        self.Hide()
+        # 直接顯示中央管理器 MainFrame
+        self.main_frame.Show()
     def OnRegisterClick(self, event):
         self.Hide(); self.main_frame.GetFrame('Register', RegisterForm).Show()
     def OnLoginSubmit(self, event):
@@ -102,6 +112,10 @@ class BookDetailFrame(BookDetailFrameBase):
         BookDetailFrameBase.__init__(self, parent)
         self.main_frame = parent
         self.current_book_data = None  # 儲存當前書籍資料
+
+    def OnBackClick(self, event):
+        self.Hide()
+        self.main_frame.Show()
 
     def UpdateInfo(self, data):
         """
@@ -179,6 +193,13 @@ class AdminLoginForm(AdminLoginFormBase):
     def __init__(self, parent):
         AdminLoginFormBase.__init__(self, parent)
         self.main_frame = parent
+        self.login_submit_button.Bind(wx.EVT_BUTTON, self.OnAdminLoginSubmit)
+        self.back_btn.Bind(wx.EVT_BUTTON, self.OnBackToChoice)
+    def OnBackToChoice(self, event):
+        """點擊返回鍵：回到主畫面"""
+        self.Hide()
+        # 直接顯示中央管理器 MainFrame
+        self.main_frame.Show()
     def OnAdminLoginSubmit(self, event):
         acc = self.account_input.GetValue()
         pwd = self.password_input.GetValue()
@@ -192,6 +213,12 @@ class AdminPanelFrame(AdminPanelFrameBase):
     def __init__(self, parent):
         AdminPanelFrameBase.__init__(self, parent)
         self.main_frame = parent
+        # 確保綁定新增讀者按鈕
+        self.add_reader_button.Bind(wx.EVT_BUTTON, self.OnAddReader)
+    def OnAddReader(self, event):
+        # 開啟 EditReaderForm 並傳入 None 代表「新增」模式
+        dlg = EditReaderForm(self.main_frame, None)
+        dlg.Show()
     def OnViewReaders(self, event):
         self.Hide()
         self.main_frame.GetFrame('ReaderList', ReaderListFrame).Show()
@@ -203,8 +230,10 @@ class ReaderListFrame(ReaderListFrameBase):
         ReaderListFrameBase.__init__(self, parent)
         self.main_frame = parent
         
+        self.edit_button.Bind(wx.EVT_BUTTON, self.OnEditReader)
         # 綁定顯示事件，確保每次切換到這畫面都會刷新列表
         self.Bind(wx.EVT_SHOW, self.OnShow)
+        self.back_button.Bind(wx.EVT_BUTTON, self.OnBackClick)
 
     def OnShow(self, event):
         """當視窗顯示時觸發，從資料庫撈取資料填入表格"""
@@ -245,21 +274,69 @@ class ReaderListFrame(ReaderListFrameBase):
         self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
 
     def OnEditReader(self, event):
-        """處理修改資料按鈕 (可選)"""
         selected = self.reader_list_ctrl.GetFirstSelected()
-        if selected == -1:
-            wx.MessageBox("請先從列表中選擇一位讀者！", "提示")
-            return
+        if selected != -1:
+            # 1. 抓取該行讀者資料
+            rid = self.reader_list_ctrl.GetItemText(selected, 0)
+            name = self.reader_list_ctrl.GetItemText(selected, 1)
+            email = self.reader_list_ctrl.GetItemText(selected, 2)
+            credit = self.reader_list_ctrl.GetItemText(selected, 3)
         
-        # 獲取選中讀者的 ID
-        reader_id = self.reader_list_ctrl.GetItemText(selected, 0)
-        wx.MessageBox(f"準備修改讀者 {reader_id} 的資料 (功能開發中)", "提示")
+            # 2. 透過 MainFrame 開啟視窗，確保資源正確對接
+            # 修正點：必須明確傳入選中的 reader_data
+            edit_form = EditReaderForm(self.main_frame, (rid, name, email, credit))
+            edit_form.Show()
+        else:
+            # 💡 增加提示：如果沒選中任何一行，按鈕點擊會看起來像「沒反應」
+            wx.MessageBox("請先從列表中選擇一位讀者！", "提示")
+class EditReaderForm(EditReaderFormBase):
+    def __init__(self, parent, reader_data=None):
+        EditReaderFormBase.__init__(self, parent)
+        self.main_frame = parent
+        self.reader_id = None
+        
+        self.complete_button.Bind(wx.EVT_BUTTON, self.OnComplete)
+        self.cancel_button.Bind(wx.EVT_BUTTON, self.OnCancel)
+        
+        # 判斷是修改還是新增
+        if reader_data:
+            self.SetTitle("修改讀者資料")
+            self.reader_id = reader_data[0]
+            self.reader_name_input.SetValue(str(reader_data[1]))
+            # 讀者編號欄位叫 reader_id_input
+            self.reader_id_input.SetValue(str(reader_data[0]))
+            self.reader_id_input.SetEditable(False) # ID 通常不給改
+            self.email_input.SetValue(str(reader_data[2]))
+            self.credit_score_input.SetValue(str(reader_data[3]))
+        else:
+            self.SetTitle("新增讀者資料")
 
-    def OnBackClick(self, event):
-        """返回管理員主面板"""
-        self.Hide()
-        self.main_frame.GetFrame('AdminPanel', AdminPanelFrame).Show()
+    def OnComplete(self, event): 
+        # 1. 取得畫面上的最新輸入值
+        name = self.reader_name_input.GetValue()
+        email = self.email_input.GetValue()
+        credit = self.credit_score_input.GetValue()
+        rid = self.reader_id_input.GetValue()
 
+        # 2. 真正呼叫資料庫 (修正 image_fa66a5.png 只有註解的問題)
+        if self.reader_id:
+            success = self.main_frame.db.update_reader_info(rid, name, email, credit)
+        else:
+            success = self.main_frame.db.add_reader(rid, name, email, credit)
+            
+        # 3. 處理結果並刷新列表
+        if success:
+            wx.MessageBox("資料儲存成功！", "成功")
+            # 💡 這裡加入刷新列表的程式碼
+            reader_list = self.main_frame.frames.get('ReaderList')
+            if reader_list:
+                reader_list.RefreshReaderTable()
+            self.Destroy()
+        else:
+            wx.MessageBox("資料儲存失敗，請檢查編號是否重複或縮排錯誤。", "錯誤")
+
+    def OnCancel(self, event):
+        self.Destroy()
 # =======================================================================
 # 備用類別：防止未定義錯誤
 # =======================================================================
@@ -267,4 +344,3 @@ class BorrowResultFrame(BorrowResultFrameBase): pass
 class ReserveResultFrame(ReserveResultFrameBase): pass
 class AdminBookDetail(AdminBookDetailBase): pass
 class EditBookForm(EditBookFormBase): pass
-class EditReaderForm(EditReaderFormBase): pass
