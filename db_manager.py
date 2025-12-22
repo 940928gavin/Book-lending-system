@@ -38,7 +38,8 @@ class DBManager:
         if self.cursor.fetchone()[0] == 0:
             books = [
                 ('B001', 'Python 入門指南', '張大文', '978-001', 5),
-                ('B002', 'wxPython 介面設計', '李小美', '978-002', 2)
+                ('B002', 'C++ 入門指南', '李小美', '978-002', 2),
+                ('B003', '資料庫實務', '王老五', '978-003', 3)
             ]
             self.cursor.executemany("INSERT INTO Books VALUES (?,?,?,?,?)", books)
             self.cursor.execute("INSERT OR IGNORE INTO Readers VALUES ('admin', '管理員', 'admin@mail.com', 'admin123', 999)")
@@ -51,7 +52,7 @@ class DBManager:
         if self.cursor.fetchone()[0] == 0:
             books = [
                 ('B001', 'Python 入門指南', '張大文', '978-001', 5),
-                ('B002', 'wxPython 介面設計', '李小美', '978-002', 2),
+                ('B002', 'C++ 入門指南', '李小美', '978-002', 2),
                 ('B003', '資料庫實務', '王老五', '978-003', 3)
             ]
             self.cursor.executemany("INSERT INTO Books VALUES (?,?,?,?,?)", books)
@@ -124,5 +125,33 @@ class DBManager:
             JOIN Books ON Borrows.BookID = Books.BookID WHERE Borrows.ReaderID = ?
         """, (rid,))
         return self.cursor.fetchall()
+    # db_manager.py
 
+    def update_reader_info(self, rid, name, email, credit):
+        """更新現有讀者資料 """
+        try:
+            self.cursor.execute(
+            "UPDATE Readers SET Name=?, Email=?, Credit=? WHERE ReaderID=?",
+            (name, email, credit, rid)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"更新失敗: {e}")
+            return False
+
+    def add_reader(self, rid, name, email, credit): # 修正：加入 rid 參數 
+        """新增讀者資料 """
+        try:
+            # 注意：Readers 表格有 5 個欄位 (ID, Name, Email, Password, Credit) [cite: 1, 3]
+            self.cursor.execute(
+            "INSERT INTO Readers (ReaderID, Name, Email, Password, Credit) VALUES (?, ?, ?, ?, ?)",
+            (rid, name, email, '123456', credit) # 補上預設密碼 
+            )
+            self.conn.commit() 
+            return True 
+        except Exception as e:
+            print(f"新增失敗: {e}")
+            return False 
+    
     def close(self): self.conn.close()
